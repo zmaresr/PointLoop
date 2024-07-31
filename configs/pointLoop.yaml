@@ -1,0 +1,114 @@
+model:
+  NAME: PointLoop
+  Down_args1:
+    NAME: PointLoopDown # first unit
+    in_channels: 4
+    width: None
+    strides: [4, 4, 4, 4]
+    layers: 3
+    use_res: False
+    mlps: [[[32, 32, 64]],
+        [[64, 64, 128]],
+        [[128, 128, 256]],
+        [[128, 128, 256]]]
+    radius: 0.1
+    num_samples: 32
+    sampler: fps
+    aggr_args:
+      NAME: 'convpool'
+      feature_type: 'dp_fj'
+      anisotropic: False
+      reduction: 'max'
+    group_args:
+      NAME: 'ballquery'
+      use_xyz: True
+      normalize_dp: True
+    conv_args:
+      order: conv-norm-act
+    act_args:
+      act: 'relu'
+    norm_args:
+      norm: 'bn'      
+    num_loop: 3 # number of PointLoop units
+    return_sa_query_idx: True # Returns the index of the ball query for each SA in the first encoder to avoid repeated ball queries in subsequent loop units
+    num_add: -1 # -1 indicates that it fuses with the previous unit only. 2 indicates that each loop unit fuses with only the first unit. 3 indicates that each loop unit is fused with the output features of the first unit and its predecessor.
+    add_type: 0 # 0 indicates the weighted addition operation. 1 indicates the concatenate operation.
+    add_norm: True
+    # MNPNet
+    mnp: True
+    mnp_radius: [[0.05, 0.1], [0.1, 0.2], [0.2, 0.4], [0.4, 0.8]]  # the sampling radius of MNPNet
+    mnp_nsample: [[16, 32], [16, 32], [16, 32], [16, 32]]  # the number of sampling points in MNPNet
+    mnp_scoring_redis: True # scoring and redistribution
+    mnp_num_posconvs: 0
+    mnp_expansion: 4
+
+  Down_args2:
+    NAME: MidPointLoopDown # middle unit
+    in_channels: 4
+    width: None
+    strides: [4, 4, 4, 4]
+    layers: 3
+    use_res: False
+    mlps: [[[32, 32, 64]],
+           [[64, 64, 128]],
+           [[128, 128, 256]],
+           [[128, 128, 256]]]
+
+    radius: 0.1
+    num_samples: 32
+    sampler: fps
+    aggr_args:
+      NAME: 'convpool'
+      feature_type: 'dp_fj'
+      anisotropic: False
+      reduction: 'max'
+    group_args:
+      NAME: 'ballquery'
+      use_xyz: True
+      normalize_dp: True
+    conv_args:
+      order: conv-norm-act
+    act_args:
+      act: 'relu'
+    norm_args:
+      norm: 'bn'
+    # MNPNet
+    mnp: False
+    mnp_radius: [[0.05, 0.1], [0.1, 0.2], [0.2, 0.4], [0.4, 0.8]]  # the sampling radius of MNPNet
+    mnp_nsample: [[16, 32], [16, 32], [16, 32], [16, 32]]  # the number of sampling points in MNPNet
+    mnp_scoring_redis: True # scoring and redistribution
+    mnp_num_posconvs: 0
+    mnp_expansion: 4
+
+  Up_args1:
+    NAME: PointLoopUp
+    fp_mlps: [[128, 128, 128], [256, 128], [256, 256], [256, 256]]
+    num_add: -1 # -1 indicates that it fuses with the previous unit only. 2 indicates that each loop unit fuses with only the first unit. 3 indicates that each loop unit is fused with the output features of the first unit and its predecessor.
+    add_type: 0 # 0 indicates the weighted addition operation. 1 indicates the concatenate operation.
+    add_norm: True
+
+  Up_args2:
+    NAME: MidPointLoopUp
+    fp_mlps: [[128, 128, 128], [256, 128], [256, 256], [256, 256]]
+    num_add: -1 # -1 indicates that it fuses with the previous unit only. 2 indicates that each loop unit fuses with only the first unit. 3 indicates that each loop unit is fused with the output features of the first unit and its predecessor.
+    add_type: 0 # 0 indicates the weighted addition operation. 1 indicates the concatenate operation.
+    add_norm: True
+
+  cls_args:
+    NAME: SegHead
+    num_classes: 13
+    in_channels: null
+    norm_args:
+      norm: 'bn'
+
+# do not conduct rotation in small model.
+datatransforms:
+  train: [ChromaticAutoContrast, PointsToTensor, PointCloudScaling, PointCloudXYZAlign, PointCloudJitter, ChromaticDropGPU, ChromaticNormalize]
+  val: [PointsToTensor, PointCloudXYZAlign, ChromaticNormalize]
+  vote: [ChromaticDropGPU]
+  kwargs:
+    color_drop: 0.2
+    gravity_dim: 2
+    scale: [0.9, 1.1]
+    jitter_sigma: 0.005
+    jitter_clip: 0.02
